@@ -1,4 +1,8 @@
 #!/usr/bin/env ruby
+
+# Add lib path to LOAD_PATH
+$LOAD_PATH.unshift File.expand_path('../../../lib', __FILE__)
+
 require 'optparse'
 require 'ostruct'
 require 'rdkafka'
@@ -31,7 +35,7 @@ end
 
 params = {}
 optparse = OptionParser.new do |opts|
-  opts.banner = "Usage: seek_rebalance_example.rb [options]"
+  opts.banner = "Usage: seek_rebalance_consumer.rb [options]"
   opts.on("-bSERVER", "--bootstrap-server=SERVER", "Bootstrap server. Defaults to localhost:9092")
   opts.on("-gID", "--group=ID", "[Required] Consumer group ID")
   opts.on("-tTOPIC_NAME", "--topic=TOPIC_NAME", "[Required] Name of Topic to subscribe to")
