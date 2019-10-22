@@ -13,6 +13,7 @@ module Rdkafka
     @@opaques = {}
 
     # Returns the current logger, by default this is a logger to stdout.
+    # Set to :librdkafka to leave the logger as the native librdkafka.
     #
     # @return [Logger]
     def self.logger
@@ -61,8 +62,6 @@ module Rdkafka
 
     # Required config that cannot be overwritten.
     REQUIRED_CONFIG = {
-      # Enable log queues so we get callbacks in our own Ruby threads
-      :"log.queue" => true
     }.freeze
 
     # Returns a new config with the provided options which are merged with {DEFAULT_CONFIG}.
@@ -194,7 +193,12 @@ module Rdkafka
     def native_config(opaque=nil)
       Rdkafka::Bindings.rd_kafka_conf_new.tap do |config|
         # Create config
-        @config_hash.merge(REQUIRED_CONFIG).each do |key, value|
+        h = @config_hash.merge(REQUIRED_CONFIG)
+        if Rdkafka::Config.logger != :librdkafka
+          # Enable log queues so we get callbacks in our own Ruby threads
+          h[:"log.queue"] = true
+        end
+        h.each do |key, value|
           error_buffer = FFI::MemoryPointer.from_string(" " * 256)
           result = Rdkafka::Bindings.rd_kafka_conf_set(
             config,
@@ -219,8 +223,10 @@ module Rdkafka
           Rdkafka::Config.opaques[pointer.to_i] = opaque
         end
 
-        # Set log callback
-        Rdkafka::Bindings.rd_kafka_conf_set_log_cb(config, Rdkafka::Bindings::LogCallback)
+        if Rdkafka::Config.logger != :librdkafka
+          # Set log callback
+          Rdkafka::Bindings.rd_kafka_conf_set_log_cb(config, Rdkafka::Bindings::LogCallback)
+        end
 
         # Set stats callback
         Rdkafka::Bindings.rd_kafka_conf_set_stats_cb(config, Rdkafka::Bindings::StatsCallback)
@@ -240,11 +246,13 @@ module Rdkafka
         raise ClientCreationError.new(error_buffer.read_string)
       end
 
-      # Redirect log to handle's queue
-      Rdkafka::Bindings.rd_kafka_set_log_queue(
-        handle,
-        Rdkafka::Bindings.rd_kafka_queue_get_main(handle)
-      )
+      if Rdkafka::Config.logger != :librdkafka
+        # Redirect log to handle's queue
+        Rdkafka::Bindings.rd_kafka_set_log_queue(
+          handle,
+          Rdkafka::Bindings.rd_kafka_queue_get_main(handle)
+        )
+      end
 
       FFI::AutoPointer.new(
         handle,

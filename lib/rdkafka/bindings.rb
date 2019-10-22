@@ -147,6 +147,7 @@ module Rdkafka
     # Log queue
     attach_function :rd_kafka_set_log_queue, [:pointer, :pointer], :void
     attach_function :rd_kafka_queue_get_main, [:pointer], :pointer
+    attach_function :rd_kafka_queue_get_background, [:pointer], :pointer
 
     LogCallback = FFI::Function.new(
       :void, [:pointer, :int, :string, :string]
@@ -235,15 +236,24 @@ module Rdkafka
       opaque = Rdkafka::Config.opaques[opaque_ptr.to_i]
       return unless opaque
 
-      # Run callback in a different thread because calling oauthbearer_set_token
-      # seems to cause logging to deadlock.
-      # TODO: Run in the poll/background thread instead?
-      Thread.new do
+      if Rdkafka::Config.logger != :librdkafka
         begin
           client = Rdkafka::Client.new(client_ptr)
           opaque.call_oauthbearer_token_refresh_callback(client, oauthbearer_config)
         rescue => err
           Rdkafka::Config.logger.error("Unhandled exception: #{err.class} - #{err.message}")
+        end
+      else
+        # Run callback in a different thread because calling oauthbearer_set_token
+        # seems to cause logging to deadlock.
+        # TODO: Run in the poll/background thread instead?
+        Thread.new do
+          begin
+            client = Rdkafka::Client.new(client_ptr)
+            opaque.call_oauthbearer_token_refresh_callback(client, oauthbearer_config)
+          rescue => err
+            Rdkafka::Config.logger.error("Unhandled exception: #{err.class} - #{err.message}")
+          end
         end
       end
     end
