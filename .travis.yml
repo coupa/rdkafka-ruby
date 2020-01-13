@@ -17,6 +17,7 @@ rvm:
 branches:
   only:
   - master
+  - releases/v0.6.0-c3
 
 before_install:
   - gem update --system
